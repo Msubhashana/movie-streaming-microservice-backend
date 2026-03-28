@@ -11,6 +11,7 @@ app = FastAPI(
 # --- INTERNAL MICROSERVICE URLs ---
 CONTENT_API_URL = "http://localhost:5001"
 WATCHLIST_API_URL = "http://localhost:5002"
+REVIEW_API_URL = "http://localhost:5003"
 
 # --- DATA MODELS ---
 # Model for the Content API (Creating/Updating Movies)
@@ -24,6 +25,13 @@ class Movie(BaseModel):
 class MovieAddRequest(BaseModel):
     movie_id: int
 
+# Model for the Watchlist API (Adding reviews)
+class Review(BaseModel):
+    review_id: int
+    movie_id: int
+    user_id: int
+    rating: int
+    comment: str
 
 # ==========================================
 #          CONTENT API ROUTES
@@ -116,3 +124,44 @@ async def remove_from_watchlist_via_gateway(user_id: int, movie_id: int):
             raise HTTPException(status_code=e.response.status_code, detail=e.response.json().get("detail", "Error"))
         except httpx.RequestError:
             raise HTTPException(status_code=503, detail="Watchlist API is currently unavailable.")
+
+
+# ==========================================
+#          REVIEW API ROUTES
+# ==========================================
+
+@app.get("/api/reviews/movie/{movie_id}", summary="Route to Review API: Get movie reviews")
+async def get_reviews_via_gateway(movie_id: int):
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(f"{REVIEW_API_URL}/api/reviews/movie/{movie_id}")
+            response.raise_for_status()
+            return response.json()
+        except httpx.RequestError:
+            raise HTTPException(status_code=503, detail="Review API is currently unavailable.")
+
+@app.post("/api/reviews", summary="Route to Review API: Add a review")
+async def add_review_via_gateway(review: Review):
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(f"{REVIEW_API_URL}/api/reviews", json=review.model_dump())
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=e.response.status_code, detail=e.response.json().get("detail", "Error"))
+        except httpx.RequestError:
+            raise HTTPException(status_code=503, detail="Review API is currently unavailable.")
+
+
+@app.delete("/api/reviews/{review_id}", summary="Route to Review API: Delete a review")
+async def delete_review_via_gateway(review_id: int):
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.delete(f"{REVIEW_API_URL}/api/reviews/{review_id}")
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            # Passes the 404 "Review not found" error nicely to the user
+            raise HTTPException(status_code=e.response.status_code, detail=e.response.json().get("detail", "Error"))
+        except httpx.RequestError:
+            raise HTTPException(status_code=503, detail="Review API is currently unavailable.")
